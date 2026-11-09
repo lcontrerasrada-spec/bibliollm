@@ -27,4 +27,5 @@ jobs:
       - name: Mantener despierto el servidor del modelo (evita el arranque en frío)
         if: ${{ vars.BIBLIOLLM_SERVIDOR != '' }}
         continue-on-error: true
-        run: curl -s -m 90 -o /dev/null -w "Servidor: %{http_code}\n" "${{ vars.BIBLIOLLM_SERVIDOR }}/v1/models"
+        run: |
+          curl -s -m 90 -o /dev/null -w "Servidor: %{http_code}\n" "${{ vars.BIBLIOLLM_SERVIDOR }}/v1/models"
