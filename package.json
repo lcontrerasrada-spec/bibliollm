@@ -1,0 +1,22 @@
+{
+  "name": "bibliollm",
+  "version": "1.0.0",
+  "description": "BiblioLLM: asistente con LLM propio (fine-tuning LoRA + RAG) para las bibliotecas de la Universidad de Córdoba, con inventario en tiempo real en Firebase",
+  "scripts": {
+    "sync": "node sync/sync.mjs",
+    "sync:vivo": "node sync/sync.mjs --loop 5",
+    "catalogo:estatico": "node sync/sync.mjs --dry --static",
+    "dataset": "node entrenamiento/generar_dataset.mjs",
+    "emulador": "firebase emulators:start --only firestore,hosting --project demo-bibliollm",
+    "deploy": "firebase deploy --only hosting,firestore:rules"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "minisearch": "^7.1.1",
+    "papaparse": "^5.4.1",
+    "undici": "^6.21.1"
+  },
+  "type": "module"
+}

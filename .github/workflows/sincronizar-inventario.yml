@@ -1,0 +1,30 @@
+name: Sincronizar inventario (tiempo real)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # cada 10 min (GitHub puede retrasarlo unos minutos)
+  workflow_dispatch: {}       # botón "Run workflow" para correrlo a mano
+
+concurrency:
+  group: sync-inventario
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Descargar CSV de Janium y actualizar Firestore
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node sync/sync.mjs
+      - name: Mantener despierto el servidor del modelo (evita el arranque en frío)
+        if: ${{ vars.BIBLIOLLM_SERVIDOR != '' }}
+        continue-on-error: true
+        run: curl -s -m 90 -o /dev/null -w "Servidor: %{http_code}\n" "${{ vars.BIBLIOLLM_SERVIDOR }}/v1/models"

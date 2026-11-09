@@ -1,0 +1,21 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*"],
+    "headers": [
+      { "source": "**/*.@(js|css)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
+      { "source": "data/catalogo.json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=600" }] },
+      { "source": "**", "headers": [
+        { "key": "Permissions-Policy", "value": "microphone=(self)" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]}
+    ]
+  },
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "emulators": {
+    "firestore": { "port": 8080 },
+    "hosting": { "port": 5000 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}
