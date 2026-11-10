@@ -191,23 +191,44 @@ function marcarListo(detalle) {
 }
 
 // ---- Modo servidor ----
-const URL_SERVIDOR = (CONFIG.SERVIDOR_URL || '').replace(/\/+$/, '');
+// SERVIDOR_URL = 'auto' → la dirección la publica tu PC en Firestore (config/servidor)
+// cada vez que arranca el túnel; la web la sigue en tiempo real.
+let URL_SERVIDOR = CONFIG.SERVIDOR_URL === 'auto' ? '' : (CONFIG.SERVIDOR_URL || '').replace(/\/+$/, '');
+let conexionActual = 0;
+
+function servidorApagado(mensaje) {
+  modeloListo = false;
+  $('txt-modelo').textContent = 'Servidor apagado';
+  $('modelo-estado').textContent = mensaje;
+}
+
+async function probarServidor(url, id) {
+  $('txt-modelo').textContent = 'Conectando con BiblioLLM…';
+  for (let intento = 0; intento < 45; intento++) {
+    if (id !== conexionActual) return; // llegó una dirección más nueva
+    try {
+      const r = await fetch(`${url}/v1/models`, { cache: 'no-store' });
+      if (r.ok && id === conexionActual) { marcarListo('Modelo afinado · servidor propio'); return; }
+    } catch { /* aún arrancando */ }
+    if (intento === 1) $('modelo-estado').textContent = 'Despertando el servidor…';
+    await esperar(4000);
+  }
+  if (id === conexionActual) servidorApagado('No responde. Respondo en modo rápido mientras vuelve.');
+}
 
 async function conectarServidor() {
   $('btn-activar').classList.add('oculto');
   $('modelo-desc').innerHTML = 'BiblioLLM corre en <strong>nuestro servidor</strong>: no necesitas descargar nada.';
-  $('txt-modelo').textContent = 'Conectando con BiblioLLM…';
-  // Un Space gratis se duerme tras días sin uso; despertarlo toma ~1 min.
-  for (let intento = 0; intento < 60; intento++) {
-    try {
-      const r = await fetch(`${URL_SERVIDOR}/v1/models`, { cache: 'no-store' });
-      if (r.ok) { marcarListo('Modelo afinado · servidor propio'); return; }
-    } catch { /* aún arrancando */ }
-    if (intento === 1) $('modelo-estado').textContent = 'Despertando el servidor (la primera vez tarda ~1 min)…';
-    await esperar(4000);
-  }
-  $('txt-modelo').textContent = 'Servidor no disponible';
-  $('modelo-estado').textContent = 'Respondo en modo rápido mientras el servidor vuelve.';
+  if (CONFIG.SERVIDOR_URL !== 'auto') { probarServidor(URL_SERVIDOR, ++conexionActual); return; }
+  $('txt-modelo').textContent = 'Buscando el servidor…';
+  inventario.escucharServidor((info) => {
+    const url = info && info.activo && info.url ? info.url.replace(/\/+$/, '') : '';
+    if (url && url === URL_SERVIDOR && modeloListo) return;
+    URL_SERVIDOR = url;
+    const id = ++conexionActual;
+    if (!url) return servidorApagado('El servidor de BiblioLLM está apagado. Respondo en modo rápido con las fichas.');
+    probarServidor(url, id);
+  });
 }
 
 async function generarServidor(mensajes, burbuja) {
@@ -354,7 +375,7 @@ async function enviar(pregunta) {
     info = r.error ? '⚡ Respuesta rápida (el modelo no respondió a tiempo)' : `🧠 BiblioLLM · ${((performance.now() - t0) / 1000).toFixed(1)} s`;
   } else {
     texto = respuestaRapida(pregunta, rec, opcion);
-    info = CONFIG.MODO_LLM === 'servidor' ? '⚡ Respuesta rápida (conectando con BiblioLLM…)' : '⚡ Respuesta rápida (activa BiblioLLM para respuestas conversacionales)';
+    info = CONFIG.MODO_LLM === 'servidor' ? '⚡ Respuesta rápida (el servidor de BiblioLLM no está disponible)' : '⚡ Respuesta rápida (activa BiblioLLM para respuestas conversacionales)';
   }
   burbuja.innerHTML = markdown(texto);
 
@@ -449,9 +470,9 @@ function hablar(texto) {
 // ---------------------------------------------------------------
 // Arranque
 // ---------------------------------------------------------------
-inventario.iniciar().catch((e) => { $('txt-inventario').textContent = 'Error cargando inventario'; console.error(e); });
+const arranqueInventario = inventario.iniciar().catch((e) => { $('txt-inventario').textContent = 'Error cargando inventario'; console.error(e); });
 if (CONFIG.MODO_LLM === 'servidor') {
-  conectarServidor();
+  arranqueInventario.then(conectarServidor);
 } else {
   let activoAntes = false;
   try { activoAntes = localStorage.getItem('bibliollm-activo') === '1'; } catch {}

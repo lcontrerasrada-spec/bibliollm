@@ -3,3 +3,4 @@ scratch/
 *.log
 service-account*.json
 .firebase/
+servidor-pc/modelo.json

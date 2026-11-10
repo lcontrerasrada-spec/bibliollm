@@ -113,6 +113,16 @@ export class Inventario extends EventTarget {
     return cambiados;
   }
 
+  /** Sigue en vivo la dirección del servidor del modelo que publica tu PC. */
+  escucharServidor(cb) {
+    if (!this.db) { cb(null); return; }
+    this.fs.onSnapshot(
+      this.fs.doc(this.db, 'config/servidor'),
+      (d) => cb(d.exists() ? d.data() : null),
+      () => cb(null)
+    );
+  }
+
   /** Guarda la consulta (anónima) para mejorar/reentrenar el modelo. */
   async registrarConsulta(datos) {
     if (!this.db || !CONFIG.GUARDAR_CONSULTAS) return null;

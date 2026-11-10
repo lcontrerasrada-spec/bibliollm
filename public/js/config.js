@@ -18,7 +18,7 @@ export const CONFIG = {
   //    'navegador' → se descarga (~0,5 GB) y corre en el navegador del usuario.
   MODO_LLM: new URLSearchParams(location.search).get('modo') || 'servidor',
   //    URL de tu Space, sin "/" al final (la cambias en la fase 6):
-  SERVIDOR_URL: new URLSearchParams(location.search).get('servidor') || 'https://TU-USUARIO-bibliollm.hf.space',
+    SERVIDOR_URL: new URLSearchParams(location.search).get('servidor') || 'auto',
 
   // 3) Solo para MODO_LLM = 'navegador'
   MODELO_ID: new URLSearchParams(location.search).get('modelo') || 'onnx-community/Qwen2.5-0.5B-Instruct',

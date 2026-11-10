@@ -8,7 +8,8 @@
     "catalogo:estatico": "node sync/sync.mjs --dry --static",
     "dataset": "node entrenamiento/generar_dataset.mjs",
     "emulador": "firebase emulators:start --only firestore,hosting --project demo-bibliollm",
-    "deploy": "firebase deploy --only hosting,firestore:rules"
+    "deploy": "firebase deploy --only hosting,firestore:rules",
+    "servidor": "node servidor-pc/iniciar.mjs"
   },
   "author": "",
   "license": "ISC",

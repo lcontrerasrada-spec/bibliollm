@@ -6,6 +6,8 @@ service cloud.firestore {
     match /catalogo_shards/{id}    { allow read: if true; allow write: if false; }
     match /catalogo_meta/{id}      { allow read: if true; allow write: if false; }
     match /catalogo_novedades/{id} { allow read: if true; allow write: if false; }
+    // Dirección pública del servidor del modelo (la escribe tu PC con la cuenta de servicio)
+    match /config/{id}             { allow read: if true; allow write: if false; }
 
     // Consultas anónimas para reentrenar: se pueden crear y valorar (👍/👎),
     // pero nadie puede leerlas desde la web.
