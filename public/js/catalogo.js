@@ -140,7 +140,8 @@ export const PROMPT_SISTEMA =
   'Respondes en español, cercana, clara y breve. Usa SOLO la información de las FICHAS DEL CATÁLOGO y de la ' +
   'INFORMACIÓN DE LA BIBLIOTECA; nunca inventes títulos, autores, copias, horarios ni ubicaciones. Si no tienes ' +
   'el dato, dilo con amabilidad y sugiere otra búsqueda o el sitio web. Para libros, di si hay copias disponibles, ' +
-  'en qué sede y con qué clasificación se ubican en el estante.';
+  'en qué sede y con qué clasificación se ubican en el estante. Si la pregunta se refiere a un libro del que ya se ' +
+  'habló ("ese", "¿y en Lorica?"), responde sobre ese libro usando su ficha.';
 
 export function construirMensajeUsuario(pregunta, registros, total = registros.length, infoBiblioteca = '') {
   const partes = [];
@@ -156,9 +157,10 @@ export function construirMensajeUsuario(pregunta, registros, total = registros.l
   return partes.join('\n\n');
 }
 
-export function construirMensajes(pregunta, registros, total, infoBiblioteca = '') {
+export function construirMensajes(pregunta, registros, total, infoBiblioteca = '', historial = []) {
   return [
     { role: 'system', content: PROMPT_SISTEMA },
+    ...historial, // turnos anteriores (pregunta/respuesta) → memoria de la conversación
     { role: 'user', content: construirMensajeUsuario(pregunta, registros, total, infoBiblioteca) },
   ];
 }

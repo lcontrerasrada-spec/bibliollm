@@ -12,6 +12,8 @@ import {
   estadoBiblioteca, temasInstitucionales, contextoInstitucional, esSoloInstitucional,
 } from './institucional.js';
 import { OrbeAgua } from './orbe.js';
+import { detectarSeguimiento, aspectoPregunta, contextoSeguimiento, historialCompacto, tienePronombre } from './memoria.js';
+import { detectarSede } from './rag.js';
 
 const $ = (id) => document.getElementById(id);
 const historial = $('historial');
@@ -25,6 +27,19 @@ let generando = null;
 let contador = 0;
 const fichasVisibles = new Map(); // id → Set(elementos)
 const filtro = { sede: '', soloDisp: false };
+
+// ---------------------------------------------------------------
+// Memoria de la conversación: libro en foco + últimos turnos
+// ---------------------------------------------------------------
+let foco = null;          // registro del libro del que se está hablando
+const turnos = [];        // [{ pregunta, respuesta }]
+function ponerFoco(r) {
+  foco = r || null;
+  const chip = $('foco');
+  if (!foco) { chip.classList.add('oculto'); return; }
+  $('foco-titulo').textContent = foco.t.length > 48 ? foco.t.slice(0, 46) + '…' : foco.t;
+  chip.classList.remove('oculto');
+}
 
 // ---------------------------------------------------------------
 // Marca y saludo
@@ -205,6 +220,7 @@ function pintarFichas(contenedor, registros, desde = 1) {
 let detalleActual = null;
 function abrirDetalle(r) {
   detalleActual = r;
+  ponerFoco(r);
   $('det-tipo').textContent = [r.tp, r.area].filter(Boolean).join(' · ');
   $('det-titulo').textContent = r.t;
   $('det-autor').textContent = [r.a || 'Sin autor registrado', r.i].filter(Boolean).join(' · ');
@@ -318,8 +334,36 @@ function respuestaInstitucional(temas) {
   return l.join('\n\n');
 }
 
+function respuestaSeguimientoRapida(pregunta, rec) {
+  const r = foco && (inventario.porId.get(foco.id) || foco);
+  if (!r) return '';
+  const t = `**${r.t}**`;
+  const disp = () => Object.entries(r.s).map(([s, v]) => `${sedeCorta(s)}: ${v.d} disponible${v.d === 1 ? '' : 's'}${v.p ? `, ${v.p} prestado${v.p > 1 ? 's' : ''}` : ''}`).join(' · ');
+  if (rec.seguimiento === 'ediciones') return rec.registros.length > 1
+    ? `De ${t} hay ${rec.total} ediciones; te las muestro de la más reciente a la más antigua 👇` : `Solo encontré esta edición de ${t}.`;
+  if (rec.seguimiento === 'autor') return rec.registros.length
+    ? `Además de ${t}, de ${r.a} hay ${rec.total} obra${rec.total > 1 ? 's' : ''} más 👇` : `No encontré otras obras de ${r.a || 'ese autor'} en el catálogo.`;
+  switch (aspectoPregunta(pregunta)) {
+    case 'autor': return r.a ? `${t} es de ${r.a}${r.i ? ` (${r.i})` : ''}.` : `El catálogo no registra el autor de ${t}.`;
+    case 'anio': case 'editorial': case 'edicion':
+      return `${t}: ${[r.i, r.e, r.l, r.y].filter(Boolean).join(', ') || 'el catálogo no registra esos datos'}.`;
+    case 'isbn': return r.isbn ? `El ISBN de ${t} es ${r.isbn}.` : `La ficha de ${t} no tiene ISBN registrado.`;
+    case 'ubicacion': return `Para encontrar ${t}: ${r.col || 'pregunta en el mostrador'}${r.c ? `, clasificación ${r.c}` : ''}. Toca la ficha para ver los pasos.`;
+    case 'domicilio': return `${totalDisponibles(r) ? '¡Sí! La' : 'Ahora mismo no hay copias libres, pero la'} biblioteca presta material para llevar a domicilio.\n📦 ${disp()}`;
+    case 'sede': {
+      const sede = detectarSede(pregunta);
+      const v = r.s[sede];
+      const otras = Object.entries(r.s).filter(([s, x]) => s !== sede && x.d).map(([s, x]) => `${sedeCorta(s)} (${x.d})`);
+      if (v && v.d) return `¡Sí! En ${sedeCorta(sede)} hay ${v.d} copia${v.d > 1 ? 's' : ''} disponible${v.d > 1 ? 's' : ''} de ${t}.`;
+      return `En ${sedeCorta(sede)} no hay copias ${v ? 'libres' : ''} de ${t} ahora mismo.${otras.length ? ` Pero sí hay en ${otras.join(' y ')}.` : ''}`;
+    }
+    default: return `${t}\n📦 ${disp()}`;
+  }
+}
+
 function respuestaRapida(pregunta, rec, opcion, temas) {
   if (esCharla(pregunta)) return respuestaCharla(pregunta);
+  if (rec.seguimiento) return respuestaSeguimientoRapida(pregunta, rec);
   if (rec.soloInst) return respuestaInstitucional(temas);
   if (opcion && rec.registros[opcion - 1]) {
     const r = rec.registros[opcion - 1];
@@ -357,7 +401,11 @@ function pintarAcciones(caja, rec, temas) {
   if (rec.registros?.length && !rec.soloDisp && rec.registros.some((r) => !totalDisponibles(r))) {
     boton('Solo los disponibles', () => { $('chk-disp').checked = true; filtro.soloDisp = true; enviar(rec.consulta); });
   }
-  if (rec.registros?.length) boton('¿Dónde queda la biblioteca?', () => enviar('¿Dónde queda la biblioteca?'));
+  if (foco && rec.registros?.length && !rec.seguimiento) {
+    boton('¿Hay otra edición?', () => enviar('¿Hay otra edición?'));
+    if (foco.a) boton('Más de este autor', () => enviar('¿Qué más tiene ese autor?'));
+  }
+  if (rec.registros?.length && !foco) boton('¿Dónde queda la biblioteca?', () => enviar('¿Dónde queda la biblioteca?'));
   if (!rec.registros?.length && !temas.length && !esCharla(rec.consulta || '')) {
     if (filtro.sede) boton('Buscar en todas las sedes', () => { document.querySelector('#filtros .filtro[data-sede=""]').click(); enviar(rec.consulta); });
     boton('¿Qué puedo preguntarte?', () => enviar('¿Qué puedes hacer?'));
@@ -522,14 +570,22 @@ async function enviar(pregunta) {
   const charla = esCharla(pregunta);
   const opcion = detectarOpcion(pregunta);
   const temas = charla ? [] : temasInstitucionales(pregunta);
-  const soloInst = esSoloInstitucional(pregunta);
+  // Memoria primero si habla de "lo/ese libro"; si pregunta por la biblioteca sin pronombre, es institucional
+  const posibleSeg = !charla && !opcion && (!temas.length || tienePronombre(pregunta));
+  const seguimiento = posibleSeg ? detectarSeguimiento(pregunta, !!foco) : null;
+  const soloInst = !seguimiento && esSoloInstitucional(pregunta);
   let rec;
   if (charla || soloInst) rec = { registros: [], todos: [], total: 0, soloInst };
-  else if (opcion && ultimas.registros.length) {
+  else if (seguimiento) {
+    // Memoria: la pregunta habla del libro en foco ("¿y en Lorica?", "¿quién lo escribió?")
+    const ctx = contextoSeguimiento(seguimiento, foco, inventario.idx, inventario.porId, recuperar);
+    rec = { registros: ctx.registros, todos: [], total: ctx.total, seguimiento };
+  } else if (opcion && ultimas.registros.length) {
     rec = { ...ultimas, todos: [], registros: ultimas.registros.map((r) => inventario.porId.get(r.id) || r) };
+    if (rec.registros[opcion - 1]) ponerFoco(rec.registros[opcion - 1]);
   } else {
     rec = recuperar(inventario.idx, inventario.porId, pregunta, POR_PAGINA, filtro);
-    if (rec.registros.length) ultimas = rec;
+    if (rec.registros.length) { ultimas = rec; ponerFoco(rec.registros[0]); }
   }
   rec.consulta = pregunta;
   const infoBiblio = temas.length ? contextoInstitucional(temas) : '';
@@ -559,7 +615,9 @@ async function enviar(pregunta) {
     burbuja.classList.add('escribiendo');
     $('btn-parar').classList.remove('oculto');
     orbeAgua.estado('pensando');
-    const r = await generarLLM(construirMensajes(pregunta, rec.registros, rec.total, infoBiblio), burbuja);
+    const info2 = infoBiblio || (seguimiento && aspectoPregunta(pregunta) === 'domicilio' ? contextoInstitucional(['servicios']) : '');
+    const historial = seguimiento || opcion ? historialCompacto(turnos) : [];
+    const r = await generarLLM(construirMensajes(pregunta, rec.registros, rec.total, info2, historial), burbuja);
     $('btn-parar').classList.add('oculto');
     burbuja.classList.remove('escribiendo');
     orbeAgua.estado('reposo');
@@ -570,6 +628,13 @@ async function enviar(pregunta) {
     info = '⚡ Respuesta rápida';
   }
   burbuja.innerHTML = markdown(texto);
+  if (seguimiento) {
+    const nota = document.createElement('div');
+    nota.className = 'nota-memoria';
+    nota.textContent = `🧠 Sobre «${foco.t.length > 50 ? foco.t.slice(0, 48) + '…' : foco.t}»`;
+    caja.insertBefore(nota, burbuja);
+  }
+  if (!charla) { turnos.push({ pregunta, respuesta: texto }); if (turnos.length > 4) turnos.shift(); }
   pintarAcciones(caja, rec, temas);
 
   const ref = await inventario.registrarConsulta({
@@ -589,6 +654,7 @@ $('form').addEventListener('submit', (e) => {
   enviar(v);
 });
 document.querySelectorAll('#sugerencias button').forEach((b) => (b.onclick = () => enviar(b.textContent)));
+$('foco-quitar').onclick = () => { ponerFoco(null); turnos.length = 0; toast('Listo, empezamos de cero 🧹'); };
 
 // ---------------------------------------------------------------
 // Voz

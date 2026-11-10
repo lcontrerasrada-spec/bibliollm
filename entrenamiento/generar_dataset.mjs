@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import MiniSearch from 'minisearch';
 import { crearIndice, recuperar, terminosBusqueda } from '../public/js/rag.js';
 import { construirMensajes, normalizar, totalDisponibles } from '../public/js/catalogo.js';
+import { detectarSeguimiento, aspectoPregunta, contextoSeguimiento, historialCompacto } from '../public/js/memoria.js';
 import { MARCA, BIBLIOTECA_CENTRAL as BC, UNIVERSIDAD as U, contextoInstitucional, temasInstitucionales, esSoloInstitucional } from '../public/js/institucional.js';
 
 const __dir = path.dirname(fileURLToPath(import.meta.url));
@@ -381,6 +382,85 @@ for (let i = 0; i < 400; i++) {
     ? `¡Sí! La biblioteca presta material para llevar a domicilio, y **${t}** tiene copias disponibles.\n\n📦 ${lineaDisp(ex)}${ex.c ? `\n🔢 Clasificación: ${ex.c}${ex.col ? ` · 📍 ${ex.col}` : ''}` : ''}\n\nLlévalo al mostrador para registrar el préstamo.`
     : `La biblioteca sí presta material a domicilio, pero ahora mismo **${t}** no tiene copias libres.\n\n📦 ${lineaDisp(ex)}\n\nPregunta en el mostrador cuándo vuelve.`;
   agregar(q, rec.registros, rec.total, resp, 'institucional', info);
+}
+
+
+// ---------- Conversaciones con memoria (2 turnos sobre el mismo libro) ----------
+const SEGUIMIENTOS = {
+  sede: ['¿y en {S}?', '¿lo tienen en {S}?', '¿y hay en la sede {S}?', '¿está en {S}?'],
+  autor: ['¿quién lo escribió?', '¿quién es el autor?', '¿de quién es ese libro?', 'y el autor?'],
+  anio: ['¿de qué año es?', '¿cuándo se publicó?', '¿es reciente?'],
+  editorial: ['¿qué editorial es?', '¿de qué editorial es ese libro?'],
+  edicion: ['¿qué edición es?', '¿de qué edición es ese?'],
+  isbn: ['¿cuál es el ISBN?', '¿tiene ISBN?'],
+  ubicacion: ['¿dónde lo encuentro?', '¿en qué estante está?', '¿y cómo lo ubico?', '¿cuál es su clasificación?'],
+  domicilio: ['¿me lo puedo llevar a la casa?', '¿lo puedo sacar de la biblioteca?', '¿y me lo prestan para la casa?'],
+  disponibilidad: ['¿cuántas copias hay?', '¿está disponible?', '¿y todavía hay copias?', '¿hay alguno libre?'],
+  tema: ['¿de qué trata?', '¿sobre qué tema es?'],
+  ediciones: ['¿hay otra edición?', '¿cuál es la edición más reciente?', '¿tienen otras ediciones?'],
+  autor_mas: ['¿qué más tiene ese autor?', '¿hay otros libros del mismo autor?', '¿qué otros libros escribió?'],
+};
+const sedeCorta = (x) => x.replace(' (Montería)', '');
+const sinFin = (t) => t.replace(/[ .:;,/]+$/, '');
+
+function respuestaSeguimiento(aspecto, r, ctx, sede) {
+  const t = `**${sinFin(r.t)}**`;
+  switch (aspecto) {
+    case 'sede': return respuestaDisponibilidad(r, sede);
+    case 'autor': return r.a ? `${t} es de ${nombreAutor(r.a)}${r.i ? ` (${r.i})` : ''}.` : `El catálogo no registra el autor de ${t}.`;
+    case 'anio': return r.y ? `Esta edición de ${t} es de ${r.y}${r.e ? `, publicada por ${r.e}` : ''}.` : `El catálogo no registra el año de ${t}.`;
+    case 'editorial': return r.e ? `${t} es de la editorial ${r.e}${r.l ? ` (${r.l})` : ''}${r.y ? `, ${r.y}` : ''}.` : `El catálogo no registra la editorial de ${t}.`;
+    case 'edicion': return r.i ? `Es la ${r.i} de ${t}${r.y ? `, de ${r.y}` : ''}.` : `El catálogo no indica el número de edición de ${t}${r.y ? `; es de ${r.y}` : ''}.`;
+    case 'isbn': return r.isbn ? `El ISBN de ${t} es ${r.isbn}.` : `La ficha de ${t} no tiene ISBN registrado.`;
+    case 'ubicacion': return respuestaUbicacion(r);
+    case 'domicilio': return totalDisponibles(r)
+      ? `¡Sí! La biblioteca presta material para llevar a domicilio y ${t} tiene copias disponibles.\n\n📦 ${lineaDisp(r)}${r.c ? `\n🔢 Clasificación: ${r.c}` : ''}\n\nLlévalo al mostrador para registrar el préstamo.`
+      : `La biblioteca sí presta a domicilio, pero ahora mismo ${t} no tiene copias libres.\n\n📦 ${lineaDisp(r)}`;
+    case 'tema': return r.area ? `${t} está en el área ${r.area}${r.tp ? ` (${r.tp})` : ''}. El catálogo no trae un resumen del contenido, pero puedes ojearlo en la ${r.col || 'colección indicada'}.` : `No tengo un resumen de ${t}; el catálogo solo registra su ficha bibliográfica.`;
+    case 'ediciones': {
+      if (ctx.registros.length <= 1) return `Solo encontré esta edición de ${t}${r.i ? ` (${r.i})` : ''}${r.y ? `, de ${r.y}` : ''}.`;
+      const [nueva] = ctx.registros;
+      return `Sí, de ${t} hay ${ctx.total} ediciones. La más reciente es ${[nueva.i, nueva.y].filter(Boolean).join(', ') || 'la primera de la lista'}:\n\n${ctx.registros.map((x, i) => itemLista(x, i + 1)).join('\n')}`;
+    }
+    case 'autor_mas': {
+      const nombre = nombreAutor(r.a);
+      if (!ctx.registros.length) return `No encontré otras obras de ${nombre} en el catálogo, aparte de ${t}.`;
+      return `Además de ${t}, de ${nombre} tenemos ${ctx.total} obra${ctx.total > 1 ? 's' : ''} más:\n\n${ctx.registros.map((x, i) => itemLista(x, i + 1)).join('\n')}`;
+    }
+    default: return respuestaDisponibilidad(r, null);
+  }
+}
+
+let conversaciones = 0;
+for (let i = 0; i < 6000 && conversaciones < 900; i++) {
+  const r0 = elegir(catalogo);
+  const t0 = titulo(r0.t);
+  if (t0.length < 4 || t0.length > 70) continue;
+  // Turno 1: el usuario busca un libro
+  const q1 = elegir(P_TITULO)(prob(0.3) ? sinTildes(t0.toLowerCase()) : t0);
+  const rec1 = recuperar(idx, porId, q1, K);
+  const rels = rec1.registros.filter((x) => relevante(x, rec1.terms));
+  if (!rels.length) continue;
+  const foco = rec1.registros[0];
+  if (!rels.includes(foco)) continue;
+  const resp1 = rels.length > 1 ? respuestaLista(rels, rels.length === rec1.registros.length ? rec1.total : rels.length, rec1.terms.join(' ')) : respuestaDisponibilidad(foco);
+  // Turno 2: pregunta de seguimiento sobre ese mismo libro
+  let aspecto = elegir(Object.keys(SEGUIMIENTOS));
+  if (aspecto === 'autor_mas' && !foco.a) aspecto = 'autor';
+  let sede = null;
+  let q2 = elegir(SEGUIMIENTOS[aspecto]);
+  if (q2.includes('{S}')) { sede = elegir(['Central (Montería)', 'Lorica', 'Berástegui']); q2 = q2.replace('{S}', sedeCorta(sede)); }
+  const tipo = detectarSeguimiento(q2, true);
+  if (!tipo) continue; // la web no lo reconocería como seguimiento: no lo entrenamos
+  const ctx = contextoSeguimiento(tipo, foco, idx, porId, recuperar);
+  const aspectoFinal = tipo === 'ediciones' ? 'ediciones' : tipo === 'autor' ? 'autor_mas' : aspectoPregunta(q2);
+  const resp2 = respuestaSeguimiento(aspectoFinal, porId.get(foco.id), ctx, sede);
+  const info = aspectoFinal === 'domicilio' ? contextoInstitucional(['servicios']) : '';
+  const historial = historialCompacto([{ pregunta: q1, respuesta: resp1 }]);
+  const msgs = construirMensajes(q2, ctx.registros, ctx.total, info, historial);
+  msgs.push({ role: 'assistant', content: resp2 });
+  ejemplos.push({ tipo: 'memoria', messages: msgs });
+  conversaciones++;
 }
 
 // ---------- Mezclar, dividir y guardar ----------

@@ -258,3 +258,13 @@ button { font: inherit; cursor: pointer; }
   @keyframes subir { from { transform: translateY(40px); opacity: 0; } }
   .pills .pill:first-child { order: 0; }
 }
+
+/* Memoria: libro en foco */
+.foco { display: flex; align-items: center; gap: 6px; margin: 0 12px; padding: 7px 8px 7px 12px; border-radius: 12px; background: var(--verde-50); border: 1px solid var(--verde-100); font-size: 0.78rem; color: var(--verde-800); animation: entrar 0.25s ease; }
+.foco b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.foco-ayuda { color: var(--texto-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.foco button { margin-left: auto; flex: none; width: 24px; height: 24px; border-radius: 50%; border: none; background: transparent; color: var(--texto-suave); }
+.foco button:hover { background: var(--verde-100); color: var(--verde-700); }
+.nota-memoria { font-size: 0.72rem; color: var(--verde-700); font-weight: 600; }
+.filtros { margin-top: 6px; }
+@media (max-width: 860px) { .foco-ayuda { display: none; } .foco b { max-width: none; flex: 1; } }
