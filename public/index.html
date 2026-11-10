@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>BiblioLLM · Unicórdoba</title>
-  <meta name="description" content="Asistente con inteligencia artificial propia para el catálogo de las bibliotecas de la Universidad de Córdoba, con inventario en tiempo real.">
+  <title>Lía · Bibliotecas Unicórdoba</title>
+  <meta name="description" content="Lía, la asistente con inteligencia artificial de las bibliotecas de la Universidad de Córdoba: busca libros, mira la disponibilidad en vivo y consulta horarios y servicios.">
   <meta name="theme-color" content="#ffffff">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2300764a'/%3E%3Cpath d='M18 16h18a10 10 0 0 1 4 19 11 11 0 0 1-4 21H18z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2300764a'/%3E%3Ctext x='32' y='44' font-family='Arial' font-weight='700' font-size='34' text-anchor='middle' fill='%23fff'%3EL%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -15,17 +15,15 @@
   <div class="app">
     <header class="top">
       <div class="marca">
-        <div class="logo" aria-hidden="true">B</div>
+        <div class="logo" aria-hidden="true">L</div>
         <div>
-          <h1>BiblioLLM</h1>
-          <p>Asistente con IA de las Bibliotecas Unicórdoba</p>
+          <h1 id="marca-nombre">Lía</h1>
+          <p id="marca-eslogan">Tu compañera de biblioteca en Unicórdoba</p>
         </div>
       </div>
       <div class="pills">
-        <span class="pill" id="pill-inventario" title="Estado del inventario">
-          <span class="punto" id="punto-vivo"></span><span id="txt-inventario">Cargando inventario…</span>
-        </span>
-        <span class="pill" id="pill-modelo"><span id="txt-modelo">Modelo sin activar</span></span>
+        <span class="pill" id="pill-biblioteca" title="Biblioteca Central"><span class="punto" id="punto-biblio"></span><span id="txt-biblioteca">Biblioteca Central</span></span>
+        <span class="pill" id="pill-inventario" title="Estado del inventario"><span class="punto" id="punto-vivo"></span><span id="txt-inventario">Cargando inventario…</span></span>
       </div>
     </header>
 
@@ -33,21 +31,27 @@
       <section class="chat" aria-label="Conversación">
         <div class="historial" id="historial" aria-live="polite">
           <div class="bienvenida" id="bienvenida">
-            <h2>¿Qué quieres leer hoy?</h2>
-            <p>Pregunta por título, autor, tema o sede. Reviso el inventario <strong>en vivo</strong> de Central (Montería), Lorica y Berástegui.</p>
+            <h2 id="saludo">¡Hola! Soy Lía 👋</h2>
+            <p>Busca libros por título, autor o tema y te digo si hay copias <strong>ahora mismo</strong> en Central (Montería), Lorica o Berástegui. También te cuento horarios y servicios.</p>
             <div class="sugerencias" id="sugerencias">
               <button>Libros de cálculo de Stewart</button>
               <button>¿Hay álgebra lineal en Lorica?</button>
-              <button>Metodología de la investigación disponible</button>
-              <button>García Márquez</button>
+              <button>¿A qué hora cierra la biblioteca?</button>
+              <button>¿Qué servicios tiene la biblioteca?</button>
+              <button>Metodología de la investigación</button>
             </div>
           </div>
         </div>
+        <div class="filtros" id="filtros" role="group" aria-label="Filtros de búsqueda">
+          <span class="filtros-etq">Buscar en:</span>
+          <button class="filtro activo" data-sede="">Todas las sedes</button>
+          <button class="filtro" data-sede="Central (Montería)">Central</button>
+          <button class="filtro" data-sede="Lorica">Lorica</button>
+          <button class="filtro" data-sede="Berástegui">Berástegui</button>
+          <label class="filtro-disp"><input type="checkbox" id="chk-disp"> Solo disponibles</label>
+        </div>
         <form class="entrada" id="form">
-          <button type="button" class="btn-icono mic-movil" id="btn-mic-movil" aria-label="Hablar">
-            <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12Z"/></svg>
-          </button>
-          <input id="texto" type="text" autocomplete="off" maxlength="300" placeholder="Ej: química orgánica en Berástegui" aria-label="Escribe tu pregunta">
+          <input id="texto" type="text" autocomplete="off" maxlength="300" placeholder="Pregúntale a Lía… (ej: química orgánica en Berástegui)" aria-label="Escribe tu pregunta">
           <button type="button" class="btn-icono oculto" id="btn-parar" aria-label="Detener respuesta">
             <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           </button>
@@ -59,28 +63,70 @@
 
       <aside class="panel">
         <div class="tarjeta voz">
-          <button class="orbe" id="orbe" aria-label="Toca para hablar"><canvas id="orbe-canvas"></canvas></button>
+          <button class="orbe" id="orbe" aria-label="Toca para hablar con Lía"><canvas id="orbe-canvas"></canvas></button>
           <div>
-            <p id="txt-voz">Toca el círculo para hablar</p>
+            <p id="txt-voz">Toca la esfera y habla con Lía</p>
+            <p class="estado-lia" id="estado-lia">Conectando…</p>
             <label class="interruptor"><input type="checkbox" id="chk-voz" checked> Leer respuestas en voz alta</label>
           </div>
         </div>
 
-        <div class="tarjeta modelo" id="tarjeta-modelo">
-          <h3>🧠 Modelo de lenguaje</h3>
-          <p class="sub" id="modelo-desc">BiblioLLM corre <strong>dentro de tu navegador</strong>: tus preguntas no salen a servidores de IA externos.</p>
-          <div class="barra oculto" id="barra"><span id="barra-relleno"></span></div>
-          <p class="sub mono" id="modelo-estado"></p>
-          <button class="btn-primario" id="btn-activar">Activar BiblioLLM (≈0,5 GB, una sola vez)</button>
+        <div class="tarjeta biblio">
+          <div class="biblio-cab">
+            <h3>🏛️ Biblioteca Central</h3>
+            <span class="estado-biblio" id="estado-biblio">—</span>
+          </div>
+          <p class="sub">"Misael Díaz Urzola" · Campus Central, Montería</p>
+          <ul class="horario" id="horario"></ul>
+          <div class="acciones-biblio">
+            <a class="btn-sec" id="btn-mapa" target="_blank" rel="noopener">📍 Cómo llegar</a>
+            <a class="btn-sec" id="btn-web" target="_blank" rel="noopener">🌐 Sitio web</a>
+          </div>
+          <details class="servicios">
+            <summary>Servicios</summary>
+            <ul id="servicios"></ul>
+          </details>
+        </div>
+
+        <div class="tarjeta lista">
+          <h3>⭐ Mi lista <span class="contador" id="contador-lista">0</span></h3>
+          <ul id="mi-lista"><li class="vacio">Guarda libros con la ⭐ para ver su disponibilidad en vivo.</li></ul>
         </div>
 
         <div class="tarjeta vivo">
           <h3><span class="punto"></span> Inventario en vivo</h3>
           <ul id="novedades"><li class="vacio">Aquí aparecen préstamos, devoluciones y libros nuevos en cuanto ocurren.</li></ul>
         </div>
+
+        <!-- Solo se muestra en modo "navegador" (el modelo corre en el equipo del usuario) -->
+        <div class="tarjeta modelo oculto" id="tarjeta-modelo">
+          <h3>🧠 Modelo en tu navegador</h3>
+          <p class="sub" id="modelo-desc">Se descarga una vez (~0,5 GB).</p>
+          <div class="barra oculto" id="barra"><span id="barra-relleno"></span></div>
+          <p class="sub mono" id="modelo-estado"></p>
+          <button class="btn-primario" id="btn-activar">Activar</button>
+        </div>
       </aside>
     </main>
   </div>
+
+  <!-- Detalle de un libro -->
+  <div class="velo oculto" id="velo"></div>
+  <aside class="detalle oculto" id="detalle" role="dialog" aria-modal="true" aria-labelledby="det-titulo">
+    <button class="cerrar" id="det-cerrar" aria-label="Cerrar">✕</button>
+    <span class="det-tipo" id="det-tipo"></span>
+    <h2 id="det-titulo"></h2>
+    <p class="det-autor" id="det-autor"></p>
+    <div class="det-disp" id="det-disp"></div>
+    <h4>Cómo encontrarlo</h4>
+    <ol class="det-pasos" id="det-pasos"></ol>
+    <dl class="det-datos" id="det-datos"></dl>
+    <div class="det-acciones">
+      <button class="btn-primario" id="det-guardar">⭐ Guardar en mi lista</button>
+      <button class="btn-sec" id="det-copiar">📋 Copiar clasificación</button>
+    </div>
+  </aside>
+  <div class="toast oculto" id="toast"></div>
 
   <script type="module" src="js/app.js"></script>
 </body>

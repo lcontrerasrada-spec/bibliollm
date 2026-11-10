@@ -77,11 +77,11 @@ export function crearIndice(MiniSearch, registros) {
  * @param {MiniSearch} idx
  * @param {Map<string,Object>} porId
  */
-export function recuperar(idx, porId, consulta, k = 5) {
+export function recuperar(idx, porId, consulta, k = 5, opciones = {}) {
   const terms = terminosBusqueda(consulta);
-  const sede = detectarSede(consulta);
-  const soloDisp = /\bdisponible/.test(normalizar(consulta));
-  if (!terms.length) return { registros: [], terms, sede, total: 0 };
+  const sede = opciones.sede || detectarSede(consulta);
+  const soloDisp = opciones.soloDisp || /\bdisponible/.test(normalizar(consulta));
+  if (!terms.length) return { registros: [], todos: [], terms, sede, total: 0 };
 
   const q = terms.join(' ');
   let hits = idx.search(q, { combineWith: 'AND' });
@@ -100,5 +100,5 @@ export function recuperar(idx, porId, consulta, k = 5) {
     const disp = regs.filter((r) => totalDisponibles(r) > 0);
     if (disp.length) regs = disp;
   }
-  return { registros: regs.slice(0, k), terms, sede, total: regs.length, soloDisp };
+  return { registros: regs.slice(0, k), todos: regs.slice(0, 60), terms, sede, total: regs.length, soloDisp };
 }

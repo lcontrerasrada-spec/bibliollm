@@ -130,24 +130,36 @@ export function fichaTexto(r, n) {
   return campos.join(' | ');
 }
 
-export const PROMPT_SISTEMA =
-  'Eres BiblioLLM, el asistente de las bibliotecas de la Universidad de Córdoba (Colombia). ' +
-  'Respondes en español, cálido y breve. Usa SOLO la información de las FICHAS DEL CATÁLOGO; ' +
-  'nunca inventes títulos, autores, copias ni ubicaciones. Si las fichas no responden la pregunta, dilo ' +
-  'y sugiere otra búsqueda. Menciona la disponibilidad por sede y la clasificación para ubicar el libro.';
+export const MARCA = {
+  nombre: 'Lía',
+  eslogan: 'Tu compañera de biblioteca en Unicórdoba',
+};
 
-export function construirMensajeUsuario(pregunta, registros, total = registros.length) {
-  const fichas = registros.length
-    ? registros.map((r, i) => fichaTexto(r, i + 1)).join('\n')
-    : '(ninguna ficha coincide)';
-  const encabezado = registros.length ? `FICHAS DEL CATÁLOGO (coincidencias totales: ${total}):` : 'FICHAS DEL CATÁLOGO:';
-  return `${encabezado}\n${fichas}\n\nPREGUNTA: ${pregunta}`;
+export const PROMPT_SISTEMA =
+  `Eres ${MARCA.nombre}, la asistente de las bibliotecas de la Universidad de Córdoba (Colombia). ` +
+  'Respondes en español, cercana, clara y breve. Usa SOLO la información de las FICHAS DEL CATÁLOGO y de la ' +
+  'INFORMACIÓN DE LA BIBLIOTECA; nunca inventes títulos, autores, copias, horarios ni ubicaciones. Si no tienes ' +
+  'el dato, dilo con amabilidad y sugiere otra búsqueda o el sitio web. Para libros, di si hay copias disponibles, ' +
+  'en qué sede y con qué clasificación se ubican en el estante.';
+
+export function construirMensajeUsuario(pregunta, registros, total = registros.length, infoBiblioteca = '') {
+  const partes = [];
+  if (infoBiblioteca) partes.push(`INFORMACIÓN DE LA BIBLIOTECA:\n${infoBiblioteca}`);
+  if (registros.length || !infoBiblioteca) {
+    const fichas = registros.length
+      ? registros.map((r, i) => fichaTexto(r, i + 1)).join('\n')
+      : '(ninguna ficha coincide)';
+    const encabezado = registros.length ? `FICHAS DEL CATÁLOGO (coincidencias totales: ${total}):` : 'FICHAS DEL CATÁLOGO:';
+    partes.push(`${encabezado}\n${fichas}`);
+  }
+  partes.push(`PREGUNTA: ${pregunta}`);
+  return partes.join('\n\n');
 }
 
-export function construirMensajes(pregunta, registros, total) {
+export function construirMensajes(pregunta, registros, total, infoBiblioteca = '') {
   return [
     { role: 'system', content: PROMPT_SISTEMA },
-    { role: 'user', content: construirMensajeUsuario(pregunta, registros, total) },
+    { role: 'user', content: construirMensajeUsuario(pregunta, registros, total, infoBiblioteca) },
   ];
 }
 

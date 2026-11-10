@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import MiniSearch from 'minisearch';
 import { crearIndice, recuperar, terminosBusqueda } from '../public/js/rag.js';
 import { construirMensajes, normalizar, totalDisponibles } from '../public/js/catalogo.js';
+import { MARCA, BIBLIOTECA_CENTRAL as BC, UNIVERSIDAD as U, contextoInstitucional, temasInstitucionales, esSoloInstitucional } from '../public/js/institucional.js';
 
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -191,13 +192,13 @@ const P_OPCION = [
   (n) => `${['', 'la primera', 'la segunda', 'la tercera', 'la cuarta'][n]}`,
 ];
 const CHARLA = [
-  ['hola', '¡Hola! 👋 Soy BiblioLLM, el asistente de las bibliotecas de la Universidad de Córdoba. Dime un título, autor o tema y te digo si está disponible y dónde ubicarlo.'],
+  ['hola', `¡Hola! 👋 Soy ${MARCA.nombre}, tu compañera de biblioteca en la Universidad de Córdoba. Dime un título, autor o tema y te digo si está disponible y dónde ubicarlo.`],
   ['buenas tardes', '¡Buenas tardes! ¿Qué libro, autor o tema buscamos hoy?'],
   ['buenos días', '¡Buenos días! Estoy listo para ayudarte a encontrar libros en las sedes Central, Lorica y Berástegui. ¿Qué necesitas?'],
   ['gracias', '¡Con gusto! 😊 Si necesitas otro libro, aquí estoy.'],
   ['muchas gracias', '¡A ti! Que te vaya muy bien con tu lectura. 📚'],
-  ['¿quién eres?', 'Soy BiblioLLM, un modelo de lenguaje afinado con el catálogo de las bibliotecas de Unicórdoba. Consulto el inventario en tiempo real para decirte qué hay disponible y dónde está.'],
-  ['¿qué puedes hacer?', 'Puedo buscar por título, autor, tema o clasificación, decirte cuántas copias hay disponibles en cada sede y cómo ubicar el libro en el estante. Prueba con algo como «libros de cálculo de Stewart».'],
+  ['¿quién eres?', `Soy ${MARCA.nombre}, la asistente con inteligencia artificial de las bibliotecas de Unicórdoba. Reviso el inventario en tiempo real para decirte qué hay disponible, en qué sede y cómo encontrarlo. También te cuento horarios y servicios de la Biblioteca Central.`],
+  ['¿qué puedes hacer?', 'Puedo buscar libros por título, autor, tema o clasificación, decirte cuántas copias hay en cada sede y cómo ubicarlos en el estante. También te cuento el horario, la ubicación y los servicios de la Biblioteca Central. Prueba con «libros de cálculo de Stewart» o «¿a qué hora cierran?».'],
   ['¿cómo estás?', '¡Muy bien, gracias! Con todo el catálogo listo para buscar. ¿Qué te gustaría leer?'],
   ['chao', '¡Hasta luego! Vuelve cuando necesites un libro. 👋'],
   ['hola, ¿cómo funciona esto?', '¡Hola! Escríbeme o dime en voz alta lo que buscas y reviso el inventario en vivo de las tres sedes. Por ejemplo: «¿hay libros de química orgánica en Berástegui?».'],
@@ -226,11 +227,11 @@ const INVENTADOS = [
 // ---------- Generación ----------
 const vistos = new Set();
 const ejemplos = [];
-function agregar(pregunta, regs, total, respuesta, tipo) {
+function agregar(pregunta, regs, total, respuesta, tipo, info = '', permitirRepetido = false) {
   const clave = normalizar(pregunta) + '|' + regs.map((r) => r.id).join(',');
-  if (vistos.has(clave)) return;
+  if (vistos.has(clave) && !permitirRepetido) return;
   vistos.add(clave);
-  const msgs = construirMensajes(pregunta, regs, total);
+  const msgs = construirMensajes(pregunta, regs, total, info);
   msgs.push({ role: 'assistant', content: respuesta });
   ejemplos.push({ tipo, messages: msgs });
 }
@@ -319,6 +320,67 @@ for (let i = 0; ejemplos.length < N && i < N; i++) {
     if (rec.registros.some((x) => relevante(x, rec.terms))) continue;
     agregar(q, rec.registros, rec.total, respuestaNoEncontrado(rec.terms.join(' ') || q, rec.sede), 'no_encontrado');
   }
+}
+
+
+// ---------- Preguntas sobre la biblioteca y la universidad ----------
+const H = BC.horarioTexto;
+const INST = [
+  ['horario', ['¿Cuál es el horario de la biblioteca?', 'horario de atención', '¿a qué hora abre la biblioteca?', '¿hasta qué hora atienden?', '¿a qué hora cierran?', 'horario biblioteca central', '¿qué horario tienen?', '¿a qué horas puedo ir a la biblioteca?'],
+    () => elegir([
+      `🕒 La ${BC.nombre} atiende:\n\n- ${H[0]}\n- ${H[1]}\n\nEl horario publicado no incluye domingos ni festivos.`,
+      `Este es el horario de la Biblioteca Central:\n\n- ${H[0]}\n- ${H[1]}\n\n¿Te busco algún libro para que lo tengas listo cuando vayas?`,
+    ])],
+  ['horario', ['¿abren los sábados?', '¿atienden el sábado?', 'horario del sábado', '¿puedo ir un sábado?'],
+    () => `Sí 🙌 Los sábados la Biblioteca Central atiende de 8:00 a.m. a 4:00 p.m. De lunes a viernes, de 6:00 a.m. a 8:00 p.m.`],
+  ['horario', ['¿abren los domingos?', '¿atienden los domingos?', '¿abren los festivos?', '¿hay servicio el domingo?'],
+    () => `El horario publicado de la Biblioteca Central es de lunes a sábado (${H[0].toLowerCase()}; ${H[1].toLowerCase()}) y no incluye domingos ni festivos. Para confirmar fechas especiales, revisa ${U.web}`],
+  ['horario', ['¿qué horario tiene la biblioteca de Lorica?', 'horario sede Berástegui', '¿a qué hora abre la biblioteca de Lorica?', '¿cuál es el horario en Berástegui?'],
+    () => `No tengo registrado el horario de esa sede 😕 Solo tengo el de la Biblioteca Central en Montería (${H[0].toLowerCase()}; ${H[1].toLowerCase()}). Puedes confirmarlo en ${U.web}`],
+  ['ubicacion', ['¿Dónde queda la biblioteca?', '¿dónde está la biblioteca central?', 'ubicación de la biblioteca', '¿cómo llego a la biblioteca?', '¿cuál es la dirección de la universidad?', 'dirección del campus central'],
+    () => `📍 La ${BC.nombre} está ${BC.ubicacion}.\n\nDirección del Campus Central: ${U.direccion}.`],
+  ['servicios', ['¿Qué servicios tiene la biblioteca?', '¿qué ofrece la biblioteca?', 'servicios de la biblioteca', '¿qué puedo hacer en la biblioteca?'],
+    () => `En la Biblioteca Central puedes:\n\n${BC.servicios.map((x) => `- ${x}`).join('\n')}\n\n¿Quieres que te busque un libro?`],
+  ['servicios', ['¿puedo llevarme libros a la casa?', '¿prestan libros a domicilio?', '¿los libros se pueden sacar de la biblioteca?', '¿hacen préstamos para la casa?'],
+    () => `Sí 📚 La biblioteca presta material bibliográfico en sala y también para llevar a domicilio. Dime qué libro buscas y te digo si hay copias disponibles.`],
+  ['servicios', ['¿tienen salas de estudio?', '¿hay salas para estudiar en grupo?', '¿dónde puedo estudiar en grupo?', '¿hay espacio para estudiar solo?'],
+    () => `Sí, la Biblioteca Central tiene espacios de consulta y salas de estudio individual y grupal.`],
+  ['servicios', ['¿tienen computadores?', '¿hay equipos para investigar?', '¿puedo usar un computador en la biblioteca?'],
+    () => `Sí, hay equipos de cómputo para consultar el catálogo y para investigación.`],
+  ['servicios', ['¿tienen bases de datos?', '¿hay recursos digitales?', '¿tienen repositorio institucional?', 'bases de datos de la universidad'],
+    () => `Sí, la biblioteca da acceso a repositorios institucionales, recursos en línea y bases de datos digitales. Encuentras los enlaces en ${U.web}`],
+  ['servicios', ['¿tienen wifi?', '¿hay internet en la biblioteca?', '¿cuál es la clave del wifi?'],
+    () => `No tengo información sobre el wifi 😕 Lo que sí sé es que hay equipos de cómputo para consulta e investigación. Pregunta en el mostrador por el acceso a internet.`],
+  ['universidad', ['¿Qué es la Universidad de Córdoba?', 'háblame de la universidad', '¿cuál es la página de la universidad?', 'sitio web de unicordoba', '¿la universidad es pública?'],
+    () => `La ${U.nombre} es una ${U.tipo} ubicada en ${U.ciudad}.\n\n📍 Campus Central: ${U.direccion}\n🌐 ${U.web}`],
+];
+for (let ronda = 0; ronda < 3; ronda++) {
+  for (const [, preguntas, resp] of INST) {
+    for (const q0 of preguntas) {
+      const q = ronda === 0 ? q0 : ronda === 1 ? sinTildes(q0.toLowerCase()) : q0.replace(/^¿/, '').replace(/\?$/, '');
+      const temas = temasInstitucionales(q);
+      const info = contextoInstitucional(temas.length ? temas : ['universidad']);
+      const regs = esSoloInstitucional(q) ? [] : recuperar(idx, porId, q, K).registros;
+      agregar(q, regs, regs.length, resp(), 'institucional', info, true); // repetidas a propósito: refuerzan este tema
+    }
+  }
+}
+// Mixtas: libro + llevarlo a domicilio
+for (let i = 0; i < 400; i++) {
+  if (ejemplos.filter((e) => e.tipo === 'institucional').length > 260) break;
+  const r = elegir(catalogo);
+  const t = titulo(r.t);
+  if (t.length < 5 || t.length > 70) continue;
+  const q = elegir([`¿puedo llevarme ${t} a la casa?`, `¿me prestan ${t} para la casa?`, `quiero llevarme ${t}`]);
+  const rec = recuperar(idx, porId, q, K);
+  const ex = rec.registros.find((x) => normalizar(x.t) === normalizar(r.t));
+  if (!ex) continue;
+  const info = contextoInstitucional(['servicios']);
+  const disp = totalDisponibles(ex);
+  const resp = disp
+    ? `¡Sí! La biblioteca presta material para llevar a domicilio, y **${t}** tiene copias disponibles.\n\n📦 ${lineaDisp(ex)}${ex.c ? `\n🔢 Clasificación: ${ex.c}${ex.col ? ` · 📍 ${ex.col}` : ''}` : ''}\n\nLlévalo al mostrador para registrar el préstamo.`
+    : `La biblioteca sí presta material a domicilio, pero ahora mismo **${t}** no tiene copias libres.\n\n📦 ${lineaDisp(ex)}\n\nPregunta en el mostrador cuándo vuelve.`;
+  agregar(q, rec.registros, rec.total, resp, 'institucional', info);
 }
 
 // ---------- Mezclar, dividir y guardar ----------
